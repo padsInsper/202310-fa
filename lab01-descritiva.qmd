@@ -333,7 +333,7 @@ plt.show()
 
 ## Exercícios
 
-Link: https://otexts.com/fpp3/graphics-exercises.html Faça os exercícios 3, 8, 10, 12
+Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça os exercícios 3, 8, 10, 12
 
 
 
