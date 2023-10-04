@@ -1,0 +1,206 @@
+---
+title: "Lab01 - Modelagem"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+---
+
+```{r}
+# mesma base de dados, mas lendo do github
+dados <- readr::read_csv("https://github.com/padsInsper/202307-fa/raw/main/dados_lab01.csv")
+plot(dados)
+
+dados_ts <- ts(dados)
+
+# outra forma
+dados_tsibble <- dados |>
+  dplyr::mutate(
+    mes = as.Date("2005-05-01") + months(mes),
+    mes = tsibble::yearmonth(mes)
+  ) |>
+  tsibble::as_tsibble(index = mes)
+
+```
+
+
+# Forecasts simples
+
+## pacote forecast
+
+```{r}
+dados_ts_vendas <- dados_ts[,"vendas"]
+media <- forecast::meanf(dados_ts_vendas, 5)
+naive <- forecast::naive(dados_ts_vendas, 5)
+seasonal_naive <- forecast::snaive(dados_ts_vendas, 5)
+drift <- forecast::rwf(dados_ts_vendas, 5, drift = TRUE)
+```
+
+```{r}
+dados_ts_vendas |>
+  forecast::autoplot() +
+  forecast::autolayer(media, series = "Media", PI = FALSE) +
+  forecast::autolayer(naive, series = "Naive", PI = FALSE) +
+  forecast::autolayer(seasonal_naive, series = "SNaive", PI = FALSE) +
+  forecast::autolayer(drift, series = "Drift", PI = FALSE)
+```
+
+## pacote feasts
+
+Média móvel
+
+```{r}
+dados_tsibble |>
+  dplyr::mutate(ma_5 = slider::slide_dbl(
+    vendas,
+    mean,
+    .before = 2, # janela antes
+    .after = 0,  # janela depois
+    complete = TRUE # retorna um vetor com mesmo tamanho
+  )) |>
+  feasts::autoplot(vendas) +
+  ggplot2::geom_line(ggplot2::aes(y = ma_5), colour = "#D55E00")
+```
+
+Modelos que vimos no forecast
+
+```{r}
+dados_para_modelo <- dados_tsibble |>
+  tsibble::filter_index("2005 jun" ~ "2008 dec")
+
+modelos <- dados_para_modelo |>
+  fabletools::model(
+    mean = fable::MEAN(vendas),
+    naive = fable::NAIVE(vendas),
+    snaive = fable::SNAIVE(vendas),
+    drift = fable::RW(vendas ~ drift()),
+  ) |>
+  fabletools::forecast(h = 5)
+
+modelos |>
+  feasts::autoplot(dados_para_modelo, level = NULL)
+
+```
+
+## Python
+
+Não sei fazer :(
+
+```{python}
+
+
+```
+
+## Exercícios
+
+**Ler**: https://otexts.com/fpp3/accuracy.html
+
+**Link**: https://otexts.com/fpp3/toolbox-exercises.html
+
+Faça os exercícios 2, 6
+
+# Prophet
+
+## R
+
+Forecast
+
+```{r}
+library(prophet)
+
+dados_prophet <- dados |>
+  dplyr::transmute(
+    ds = as.Date("2005-05-01") + months(mes),
+    y = vendas
+  )
+
+m <- prophet(dados_prophet)
+future <- make_future_dataframe(m, periods = 12, freq = "month")
+forecast <- predict(m, future)
+plot(m, forecast)
+
+prophet::prophet_plot_components(m, forecast)
+```
+
+```{r}
+
+prophet::generated_holidays |>
+  dplyr::filter(country == "BR", year == "2022")
+
+```
+
+Componentes
+
+```{r}
+prophet_plot_components(m, forecast)
+```
+
+## Python
+
+```{python}
+from prophet import Prophet
+import pandas as pd
+
+dados = pd.read_csv("https://github.com/padsInsper/202307-fa/raw/main/serie_temporal.csv")
+```
+
+```{python}
+m = Prophet(stan_backend="CMDSTANPY")
+m.fit(dados)
+
+# make future dataframe
+future = m.make_future_dataframe(periods=12, freq='MS')
+
+# predict method
+forecast = m.predict(future)
+fig1 = m.plot(forecast)
+plt.show()
+```
+
+Componentes
+
+```{python}
+fig2 = m.plot_components(forecast)
+plt.show()
+```
+
+# Exercício em sala
+
+Faça a análise descritiva da série que está nesse link: https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv
+
+1.  plotar a série
+
+```{r}
+
+dados  <- readr::read_csv("https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv")
+
+dados_tsibble <- dados |>
+  tsibble::as_tsibble(index = ds)
+
+dados_tsibble |>
+  feasts::autoplot(y)
+
+```
+
+2.  plotar os gráficos sazonais
+
+```{r}
+dados_tsibble |>
+  feasts::gg_season(y = y)
+```
+
+3.  Decomposição
+
+```{r}
+dados_tsibble |>
+  fabletools::model(feasts::STL(y)) |>
+  fabletools::components() |>
+  feasts::autoplot()
+```
+
+4.  Teste de raiz unitária
+5.  Previsão usando o prophet
+6.  ACF e PACF
+7.  ARIMA
+8.  Teste ljung box no resíduo
