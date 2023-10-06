@@ -5,6 +5,7 @@ format:
     toc: true
     code-fold: show
     embed-resources: true
+engine: jupyter
 ---
 
 Vamos agora brincar de séries temporais.
@@ -328,12 +329,11 @@ import statsmodels.api as sm
 
 res = sm.tsa.seasonal_decompose(serie_dados)
 resplot = res.plot()
-plt.show()
 ```
 
 ## Exercícios
 
-Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça os exercícios 3, 8, 10, 12
+Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça os exercícios 8
 
 
 
