@@ -1,0 +1,89 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+
+```{r}
+
+print(1)
+dados <- readr::read_csv(
+  "base_gripe.csv",
+  skip = 2
+) |>
+  janitor::clean_names() |>
+  dplyr::mutate(
+    mes = as.Date(paste0(mes, "-01"))
+  )
+
+# lubridate
+
+#lubridate::ym
+```
+
+
+```{r}
+plot(dados$mes, dados$gripe_mundo)
+plot.ts(dados$gripe_mundo)
+
+dados_ts <- ts(
+  dados$gripe_mundo,
+  start = c(2004, 1),
+  frequency = 12
+)
+
+plot(dados_ts)
+
+class(dados_ts)
+
+```
+
+
+```{r}
+dados_xts <- xts::xts(
+  x = dados$gripe_mundo,
+  order.by = dados$mes,
+  descr = "gripe"
+)
+
+dados_xts <- xts::as.xts(dados_ts)
+
+class(dados_xts)
+
+plot(dados_xts)
+```
+
+## Pacote forecast
+
+```{r}
+
+forecast::autoplot(dados_ts)
+forecast::autoplot(dados_xts) +
+  ggplot2::theme_minimal()
+
+```
+
+## tsibble
+
+
+```{r}
+
+dados_tsibble <- dados |>
+  dplyr::mutate(
+    mes = tsibble::yearmonth(mes)
+  ) |>
+  tsibble::as_tsibble(
+    index = mes
+  )
+
+```
+
+
+```{r}
+
+feasts::autoplot(dados_tsibble)
+
+library(fpp3)
+
+```

@@ -17,9 +17,10 @@ Laboratórios de Financial Analytics. Plano inicial:
 - **Lab 2 (10/11, 18h-22h, presencial)**
   - Modeltime -- validação cruzada
   - Tempo para fazer os exercícios
+  - Séries hierárquicas
   - Retorno e log-retorno
 - **Lab 3.1 (11/11, 15h-17h, presencial)**: Modelos de volatilidade
-  - Modelos de volatilidade (ARCH/GARCH) 
+  - Modelos de volatilidade (ARCH/GARCH)
 - **Lab 3.2 (27/11, 19h-22h30, remoto)**: Modelagem de séries temporais financeiras
   - Montando a carteira
   - Fronteira eficiente, CAPM, VaR

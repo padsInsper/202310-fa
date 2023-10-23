@@ -5,9 +5,12 @@ format:
     toc: true
     code-fold: show
     embed-resources: true
+engine: knitr
 ---
 
 ```{r}
+library(fpp3)
+
 # mesma base de dados, mas lendo do github
 dados <- readr::read_csv("https://github.com/padsInsper/202307-fa/raw/main/dados_lab01.csv")
 plot(dados)
@@ -24,6 +27,86 @@ dados_tsibble <- dados |>
 
 ```
 
+Plotando a série
+
+```{r}
+dados_tsibble |>
+  autoplot(vendas)
+```
+
+## feasts (revisão)
+
+O `feasts` é o pacote atual para análise descritiva de séries temporais. Ele é descrito no FPP3 (https://otexts.com/fpp3/) e está alinhado com os princípios tidy.
+
+Season plot
+
+```{r}
+dados_tsibble |>
+  model(
+    STL(vendas)
+  ) |>
+  components() |>
+  autoplot()
+```
+
+```{r}
+dados_tsibble |>
+  feasts::gg_season(y = vendas)
+```
+
+```{r}
+dados_tsibble |>
+  feasts::gg_season(y = vendas, polar = TRUE)
+```
+
+Mais exemplos no FPP3.
+
+ACF e PACF
+
+```{r}
+dados_tsibble |>
+  feasts::ACF(vendas) |>
+  feasts::autoplot()
+```
+
+```{r}
+dados_tsibble |>
+  feasts::PACF(vendas) |>
+  feasts::autoplot()
+```
+
+Plotando todos (série, ACF, PACF)
+
+```{r}
+dados_tsibble |>
+  gg_tsdisplay(vendas)
+```
+
+```{r}
+dados_tsibble |>
+  gg_tsdisplay(vendas, plot_type = "partial")
+```
+
+Calculando a diferença da série
+
+```{r}
+dados_tsibble |>
+  mutate(diff = difference(vendas)) |>
+  gg_tsdisplay(diff, plot_type = "partial")
+```
+
+Pegar os componentes de forma tidy:
+
+```{r}
+dados_tsibble |>
+  fabletools::model(feasts::STL(vendas)) |>
+  fabletools::components() |>
+  feasts::autoplot()
+```
+
+## Exercícios
+
+Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça o exercício 8
 
 # Forecasts simples
 
@@ -31,6 +114,7 @@ dados_tsibble <- dados |>
 
 ```{r}
 dados_ts_vendas <- dados_ts[,"vendas"]
+
 media <- forecast::meanf(dados_ts_vendas, 5)
 naive <- forecast::naive(dados_ts_vendas, 5)
 seasonal_naive <- forecast::snaive(dados_ts_vendas, 5)
@@ -52,13 +136,15 @@ Média móvel
 
 ```{r}
 dados_tsibble |>
-  dplyr::mutate(ma_5 = slider::slide_dbl(
-    vendas,
-    mean,
-    .before = 2, # janela antes
-    .after = 0,  # janela depois
-    complete = TRUE # retorna um vetor com mesmo tamanho
-  )) |>
+  dplyr::mutate(
+    ma_5 = slider::slide_dbl(
+      vendas,
+      mean,
+      .before = 2, # janela antes
+      .after = 2,  # janela depois
+      complete = TRUE # retorna um vetor com mesmo tamanho
+    )
+  ) |>
   feasts::autoplot(vendas) +
   ggplot2::geom_line(ggplot2::aes(y = ma_5), colour = "#D55E00")
 ```
@@ -74,31 +160,13 @@ modelos <- dados_para_modelo |>
     mean = fable::MEAN(vendas),
     naive = fable::NAIVE(vendas),
     snaive = fable::SNAIVE(vendas),
-    drift = fable::RW(vendas ~ drift()),
+    drift = fable::RW(vendas ~ drift())
   ) |>
-  fabletools::forecast(h = 5)
+  fabletools::forecast(h = 10)
 
 modelos |>
   feasts::autoplot(dados_para_modelo, level = NULL)
-
 ```
-
-## Python
-
-Não sei fazer :(
-
-```{python}
-
-
-```
-
-## Exercícios
-
-**Ler**: https://otexts.com/fpp3/accuracy.html
-
-**Link**: https://otexts.com/fpp3/toolbox-exercises.html
-
-Faça os exercícios 2, 6
 
 # Prophet
 
@@ -146,7 +214,7 @@ dados = pd.read_csv("https://github.com/padsInsper/202307-fa/raw/main/serie_temp
 ```
 
 ```{python}
-m = Prophet(stan_backend="CMDSTANPY")
+m = Prophet()
 m.fit(dados)
 
 # make future dataframe
@@ -154,53 +222,38 @@ future = m.make_future_dataframe(periods=12, freq='MS')
 
 # predict method
 forecast = m.predict(future)
-fig1 = m.plot(forecast)
-plt.show()
+m.plot(forecast)
 ```
 
 Componentes
 
 ```{python}
-fig2 = m.plot_components(forecast)
-plt.show()
+m.plot_components(forecast)
 ```
 
 # Exercício em sala
 
-Faça a análise descritiva da série que está nesse link: https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv
-
-1.  plotar a série
+Faça a análise da série que está nesse link: https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv
 
 ```{r}
-
 dados  <- readr::read_csv("https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv")
 
 dados_tsibble <- dados |>
   tsibble::as_tsibble(index = ds)
-
-dados_tsibble |>
-  feasts::autoplot(y)
-
 ```
 
+1.  plotar a série
 2.  plotar os gráficos sazonais
+3.  Decomposição tradicional (base R) e STL
+4.  ACF e PACF
+5.  Gráficos com as diferenças
+6.  Previsão usando naive, drift, snaive etc
+7.  Previsão usando o prophet, testando diferentes parâmetros
 
-```{r}
-dados_tsibble |>
-  feasts::gg_season(y = y)
-```
+## Exercícios do livro
 
-3.  Decomposição
+**Ler**: https://otexts.com/fpp3/accuracy.html
 
-```{r}
-dados_tsibble |>
-  fabletools::model(feasts::STL(y)) |>
-  fabletools::components() |>
-  feasts::autoplot()
-```
+**Link**: https://otexts.com/fpp3/toolbox-exercises.html
 
-4.  Teste de raiz unitária
-5.  Previsão usando o prophet
-6.  ACF e PACF
-7.  ARIMA
-8.  Teste ljung box no resíduo
+Faça os exercícios 2, 6

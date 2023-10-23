@@ -278,11 +278,20 @@ forecast::ggAcf(dados_ts[,"vendas"])
 forecast::ggPacf(dados_ts[,"vendas"])
 ```
 
-## feasts
+## feasts (revisão)
 
 O `feasts` é o pacote atual para análise descritiva de séries temporais. Ele é descrito no FPP3 (https://otexts.com/fpp3/) e está alinhado com os princípios tidy.
 
 Season plot
+
+```{r}
+dados_tsibble |>
+  model(
+    STL(vendas)
+  ) |>
+  components() |>
+  autoplot()
+```
 
 ```{r}
 dados_tsibble |>
@@ -331,9 +340,15 @@ res = sm.tsa.seasonal_decompose(serie_dados)
 resplot = res.plot()
 ```
 
+
+```{r}
+aus_production |>
+  autoplot(Bricks)
+```
+
 ## Exercícios
 
-Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça os exercícios 8
+Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça o exercício 8
 
 
 
