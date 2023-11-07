@@ -1,0 +1,369 @@
+---
+title: "It's Modeltime!"
+format:
+  html:
+    theme: flatly
+    toc: true
+    number-sections: true
+    self-contained: true
+---
+
+```{r}
+library(fpp3)
+
+link <- "https://www.tesourotransparente.gov.br/ckan/dataset/f85b6632-1c9c-4beb-9e60-72e91156c984/resource/f52c016b-1773-459b-a28f-6ddc4966a702/download/Transferencias---Dados-Consolidados.xlsx"
+
+
+g <- httr::GET(link, httr::write_disk(tmp <- fs::file_temp(ext = ".xlsx")))
+
+dados_raw <- tmp |>
+  readxl::read_excel(1, "C38:OE38", col_names = FALSE,
+                     .name_repair = "minimal") |>
+  janitor::clean_names() |>
+  tidyr::pivot_longer(dplyr::everything()) |>
+  dplyr::mutate(
+    date = seq(as.Date("1991-01-01"), as.Date("2023-09-01"), "1 month"),
+    value = value / 1e9
+  ) |>
+  dplyr::select(-name) |>
+  tidyr::fill(value) |>
+  dplyr::filter(lubridate::year(date) >= 1998)
+
+
+```
+
+# Entendimento da série
+
+1. Plote os gráficos da série e das ACF/PACF e discorra sobre o aspecto da série.
+Faça o teste de raíz unitária e explique as conclusões. Existe tendência
+estocástica?
+
+```{r}
+dados_raw |>
+  ggplot(aes(date, value)) +
+  geom_line()
+```
+
+```{r}
+dados_raw |>
+  ggplot(aes(date, log(value))) +
+  geom_line()
+```
+
+Parece que faz sentido deflacionar a base nesse caso.
+
+```{r}
+dados <- dados_raw |>
+  mutate(
+    value = deflateBR::deflate(
+      value, date, "09/2023", index = "ipca"
+    )
+  )
+```
+
+
+```{r}
+# série deflacionada
+dados |>
+  ggplot(aes(date, value)) +
+  geom_line()
+```
+
+```{r}
+tdata <- dados |>
+  mutate(date = yearmonth(date)) |>
+  as_tsibble(index = date)
+```
+
+```{r}
+tdata |>
+  gg_season(value)
+```
+
+```{r}
+tdata |>
+  gg_tsdisplay(value, plot_type = "partial")
+```
+
+```{r}
+tdata |>
+  mutate(value = difference(value, 12)) |>
+  gg_tsdisplay(value, plot_type = "partial")
+```
+
+## Teste de hipótese
+
+```{r}
+tdata |>
+  features(value, unitroot_nsdiffs)
+```
+
+
+```{r}
+tdata |>
+  mutate(value = difference(value, 12)) |>
+  features(value, unitroot_ndiffs)
+
+```
+
+## Decomposição
+
+2. Use um método de decomposição estudado e explique os componentes, tendo
+em vista o aspecto da série. Existe sazonalidade? Qual periodicidade?
+
+```{r}
+tdata |>
+  fabletools::model(
+    stl = feasts::STL(value)
+  ) |>
+  fabletools::components() |>
+  autoplot()
+```
+
+
+# Modelo SARIMA
+
+3. Identifique um modelo SARIMA apropriado. Justifique o modelo escolhido
+através de critérios de informação e/ou usando a etapa de identificação da
+abordagem Box-Jenkins. Nesta etapa é possível utilizar um método automático
+de seleção das ordens do modelo.
+
+```{r}
+# knitr::include_graphics("https://otexts.com/fpp3/figs/arimaflowchart.png")
+par(mar = c(0,0,0,0))
+magick::image_read("https://otexts.com/fpp3/figs/arimaflowchart.png") |>
+  plot()
+```
+
+```{r}
+fit <- tdata |>
+  model(
+    arima_manual = ARIMA(value ~ 1 + pdq(1,0,1) + PDQ(2,1,1)),
+    stepwise = ARIMA(value),
+    search = ARIMA(value, stepwise = FALSE)
+  )
+
+fit |>
+  pivot_longer(
+    everything()
+  )
+```
+
+```{r}
+glance(fit)
+```
+
+## Diagnóstico
+
+4. Faça a verificação de diagnóstico residual de seu modelo ARIMA. Os resíduos
+são ruído branco?
+
+```{r}
+
+fit |>
+  select(arima_manual) |>
+  gg_tsresiduals(lag = 36)
+
+```
+
+```{r}
+augment(fit) |>
+  filter(.model == "stepwise") |>
+  features(.innov, ljung_box, lag = 36, dof = 4)
+```
+## Previsão
+
+5. Use o modelo SARIMA de sua escolha para fazer previsões h (livre escolha) passos à frente.
+
+```{r}
+class(forecast(fit, h = 24))
+forecast(fit, h = 24) |>
+  filter(.model == "stepwise") |>
+  autoplot(tdata)
+```
+
+```{r}
+?fabletools:::autoplot.fbl_ts
+```
+
+
+## [Extra] Comparação ARIMA e ETS
+
+```{r}
+train <- tdata |>
+  filter_index(. ~ "2019 dec")
+
+acuracia <- train |>
+  model(
+    ETS(value),
+    ARIMA(value)
+  ) |>
+  forecast(h = 24) |>
+  accuracy(tdata)
+
+acuracia
+```
+
+# Validação cruzada usando modeltime
+
+```{r}
+dados |>
+  timetk::plot_time_series(date, value)
+```
+
+Fizemos um primeiro split para ajustar o modelo. Vamos testar sua performance depois via backtesting.
+
+
+```{r}
+split_forecast <- timetk::time_series_split(
+  dados,
+  date_var = date,
+  initial = "12 years",
+  assess = "12 months"
+)
+```
+
+Vamos ajustar o modelo na parte azul e testar na parte vermelha!
+
+```{r}
+split_forecast |>
+  timetk::tk_time_series_cv_plan() |>
+  timetk::plot_time_series_cv_plan(date, value)
+```
+
+Além disso, aqui montamos um esquema de backtesting com vários recortes
+
+
+```{r}
+splits <- timetk::time_series_cv(
+  dados,
+  date_var = date,
+  initial = "60 months",
+  assess = "12 months",
+  skip = 12,
+  slice_limit = 10,
+  cumulative = FALSE
+)
+
+splits
+```
+
+```{r}
+#| fig-height: 10
+#| fig-width: 7
+splits |>
+  timetk::tk_time_series_cv_plan() |>
+  timetk::plot_time_series_cv_plan(date, value)
+```
+
+## Modelos SARIMA, ETS e Prophet
+
+6. Repita os passos acima ajustando um modelo que use o método do Prophet.
+Faça a previsão para o mesmo período e compare com o modelo SARIMA.
+
+```{r}
+
+library(modeltime)
+library(tidymodels)
+
+model_arima <- arima_reg() |>
+  set_engine("auto_arima") |>
+  fit(value ~ date, training(split_forecast))
+
+# [E]xponen[T]ial   [S]moothing
+# [E]rror, [T]rend, [S]easonal
+
+model_ets <- exp_smoothing() |>
+  set_engine("ets") |>
+  fit(value ~ date, training(split_forecast))
+
+model_prophet <- prophet_reg(seasonality_yearly = TRUE) |>
+  set_engine("prophet") |>
+  fit(value ~ date, training(split_forecast))
+
+```
+
+É possível tunar hiperparâmetros (por exemplo, os hiperparâmetros do Prophet). Uma referência para isso [está aqui](https://business-science.github.io/modeltime/articles/parallel-processing.html).
+
+```{r}
+mtable <- modeltime_table(
+  model_arima,
+  model_ets,
+  model_prophet
+)
+```
+
+## Comparação das métricas no teste (12 meses)
+
+```{r}
+dados_para_teste <- modeltime_calibrate(
+  mtable,
+  testing(split_forecast)
+)
+```
+
+
+```{r}
+dados_para_teste |>
+  modeltime_accuracy() |>
+  table_modeltime_accuracy(.interactive = FALSE)
+```
+
+Comparando os forecasts dos modelos
+
+```{r}
+dados_para_teste |>
+  modeltime_forecast(
+    new_data = testing(split_forecast),
+    actual_data = dados
+  ) |>
+  plot_modeltime_forecast()
+```
+
+Fazendo a previsão de um modelo específico
+
+```{r}
+fcast <- dados_para_teste |>
+  filter(.model_id == 3) |>
+  modeltime_refit(dados) |>
+  modeltime_forecast(
+    h = "24 months",
+    actual_data = dados,
+    conf_interval = .8
+  )
+
+fcast |>
+  plot_modeltime_forecast()
+```
+
+## Backtesting
+
+7. Faça um backtest e verifique qual modelo tem melhor poder preditivo (calcule
+medidas de performance que sejam comparáveis entre os dois modelos usando
+diferentes janelas de tempo). Nesta etapa você pode usar apenas um split
+treino/teste temporal ou vários. Justifique qual dos modelos você usaria.
+
+
+```{r}
+resamples <- mtable |>
+  modeltime.resample::modeltime_fit_resamples(
+    resamples = splits
+  )
+```
+
+
+```{r}
+resamples |>
+  modeltime.resample::plot_modeltime_resamples(
+    .point_size  = 3,
+    .point_alpha = 0.8,
+    .interactive = FALSE
+  )
+```
+
+
+```{r}
+resamples |>
+  modeltime.resample::modeltime_resample_accuracy(summary_fns = mean) |>
+  table_modeltime_accuracy(.interactive = FALSE)
+```

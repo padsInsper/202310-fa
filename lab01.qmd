@@ -3,6 +3,9 @@ title: "Untitled"
 format: html
 ---
 
+Coisas que gostaram de aprender até agora
+Dificuldades identificadas
+Coisas que gostariam / falta aprender
 
 
 ```{r}

@@ -5,8 +5,14 @@ format:
     toc: true
     code-fold: show
     embed-resources: true
-engine: knitr
+engine: jupyter
 ---
+
+
+```{python}
+import pandas as pd
+1+1
+```
 
 ```{r}
 library(fpp3)
@@ -27,12 +33,11 @@ dados_tsibble <- dados |>
 
 ```
 
-Plotando a série
-
 ```{r}
 dados_tsibble |>
   autoplot(vendas)
 ```
+
 
 ## feasts (revisão)
 
@@ -42,21 +47,22 @@ Season plot
 
 ```{r}
 dados_tsibble |>
+  gg_season(vendas)
+```
+
+```{r}
+dados_tsibble |>
+  gg_season(vendas, polar = TRUE)
+```
+
+```{r}
+# decompose(dados_tsibble$vendas)
+dados_tsibble |>
   model(
-    STL(vendas)
+    stl = STL(vendas)
   ) |>
   components() |>
   autoplot()
-```
-
-```{r}
-dados_tsibble |>
-  feasts::gg_season(y = vendas)
-```
-
-```{r}
-dados_tsibble |>
-  feasts::gg_season(y = vendas, polar = TRUE)
 ```
 
 Mais exemplos no FPP3.
@@ -65,17 +71,44 @@ ACF e PACF
 
 ```{r}
 dados_tsibble |>
-  feasts::ACF(vendas) |>
-  feasts::autoplot()
+  mutate(vendas_dif = difference(vendas)) |>
+  autoplot(vendas_dif)
 ```
 
 ```{r}
 dados_tsibble |>
-  feasts::PACF(vendas) |>
-  feasts::autoplot()
+  mutate(vendas_dif = difference(vendas)) |>
+  ACF(vendas_dif) |>
+  autoplot()
+
 ```
 
-Plotando todos (série, ACF, PACF)
+```{r}
+
+#acf()
+#forecast::Acf()
+
+# Usamos ACF para identificar a ordem do modelo ARIMA
+# na parte de AR
+dados_tsibble |>
+  ACF(vendas) |>
+  autoplot()
+
+# Um cuidado a tomar na ACF é que, se ela apresenta um
+# aspecto de decaimento exponencial, isso pode ser
+# devido a uma tendência na série. Nesse caso, é melhor
+# usar a ACF da série diferenciada.
+```
+
+A PACF é calculada da seguinte forma: a correlação parcial entre $y_t$ e $y_{t-k}$ é a correlação entre $y_t$ e $y_{t-k}$, removendo o efeito de $y_{t-1}$, $y_{t-2}$, ..., $y_{t-k+1}$.
+
+```{r}
+# Usamos PACF para identificar a ordem do modelo ARIMA
+# na parte de MA
+dados_tsibble |>
+  PACF(vendas) |>
+  autoplot()
+```
 
 ```{r}
 dados_tsibble |>
@@ -87,26 +120,11 @@ dados_tsibble |>
   gg_tsdisplay(vendas, plot_type = "partial")
 ```
 
-Calculando a diferença da série
-
 ```{r}
 dados_tsibble |>
-  mutate(diff = difference(vendas)) |>
-  gg_tsdisplay(diff, plot_type = "partial")
+  mutate(vendas_dif = difference(vendas)) |>
+  gg_tsdisplay(vendas_dif, plot_type = "partial")
 ```
-
-Pegar os componentes de forma tidy:
-
-```{r}
-dados_tsibble |>
-  fabletools::model(feasts::STL(vendas)) |>
-  fabletools::components() |>
-  feasts::autoplot()
-```
-
-## Exercícios
-
-Link: <https://otexts.com/fpp3/graphics-exercises.html> Faça o exercício 8
 
 # Forecasts simples
 
@@ -134,21 +152,6 @@ dados_ts_vendas |>
 
 Média móvel
 
-```{r}
-dados_tsibble |>
-  dplyr::mutate(
-    ma_5 = slider::slide_dbl(
-      vendas,
-      mean,
-      .before = 2, # janela antes
-      .after = 2,  # janela depois
-      complete = TRUE # retorna um vetor com mesmo tamanho
-    )
-  ) |>
-  feasts::autoplot(vendas) +
-  ggplot2::geom_line(ggplot2::aes(y = ma_5), colour = "#D55E00")
-```
-
 Modelos que vimos no forecast
 
 ```{r}
@@ -175,34 +178,34 @@ modelos |>
 Forecast
 
 ```{r}
+
 library(prophet)
 
 dados_prophet <- dados |>
-  dplyr::transmute(
+  transmute(
     ds = as.Date("2005-05-01") + months(mes),
     y = vendas
   )
 
 m <- prophet(dados_prophet)
-future <- make_future_dataframe(m, periods = 12, freq = "month")
-forecast <- predict(m, future)
+futuro <- make_future_dataframe(
+  m, periods = 12, freq = "month"
+)
+
+forecast <- predict(m, futuro)
+
 plot(m, forecast)
-
-prophet::prophet_plot_components(m, forecast)
-```
-
-```{r}
-
-prophet::generated_holidays |>
-  dplyr::filter(country == "BR", year == "2022")
 
 ```
 
 Componentes
 
 ```{r}
+
 prophet_plot_components(m, forecast)
+
 ```
+
 
 ## Python
 
@@ -225,12 +228,6 @@ forecast = m.predict(future)
 m.plot(forecast)
 ```
 
-Componentes
-
-```{python}
-m.plot_components(forecast)
-```
-
 # Exercício em sala
 
 Faça a análise da série que está nesse link: https://raw.githubusercontent.com/padsInsper/202234-fa/main/material/lab01/serie_temporal.csv
@@ -243,12 +240,116 @@ dados_tsibble <- dados |>
 ```
 
 1.  plotar a série
+
+```{r}
+dados_tsibble |>
+  autoplot(y)
+```
+
 2.  plotar os gráficos sazonais
+
+```{r}
+dados_tsibble |>
+  gg_season(y)
+```
+
 3.  Decomposição tradicional (base R) e STL
+
+```{r}
+dados_ts <- ts(dados$y, start = c(2000), freq = 365)
+decompose(dados_ts) |>
+  plot()
+```
+
+```{r}
+dados_tsibble |>
+  model(
+    stl = STL(y)
+  ) |>
+  components() |>
+  autoplot()
+```
+
 4.  ACF e PACF
+
+```{r}
+dados_tsibble |>
+  gg_tsdisplay(y, plot_type = "partial")
+```
+
+```{r}
+dados_tsibble |>
+  fabletools::features(
+    y,
+    list(
+      feasts::unitroot_kpss,
+      feasts::unitroot_ndiffs
+    )
+  )
+```
+
+```{r}
+dados_tsibble |>
+  mutate(y_dif = difference(y)) |>
+  gg_tsdisplay(y_dif, plot_type = "partial")
+```
+
+```{r}
+dados_tsibble |>
+  mutate(y_dif = difference(y)) |>
+  fabletools::features(
+    y_dif,
+    list(
+      feasts::unitroot_kpss,
+      feasts::unitroot_ndiffs
+    )
+  )
+```
+
+```{r}
+
+
+fit <- dados_tsibble |>
+  fabletools::model(
+    # arima_manual = fable::ARIMA(vendas ~ 1 + pdq(2,0,2) + PDQ(0,0,0)),
+    stepwise = fable::ARIMA(),
+    search = fable::ARIMA(stepwise = FALSE)
+  )
+
+fit
+
+```
+
+
 5.  Gráficos com as diferenças
 6.  Previsão usando naive, drift, snaive etc
+
+```{r}
+dados_tsibble |>
+  fabletools::model(
+    mean = fable::MEAN(y),
+    naive = fable::NAIVE(y),
+    snaive = fable::SNAIVE(y),
+    drift = fable::RW(y ~ drift())
+  ) |>
+  fabletools::forecast(h = 2000) |>
+  feasts::autoplot(dados_tsibble, level = NULL)
+```
+
 7.  Previsão usando o prophet, testando diferentes parâmetros
+
+
+```{r}
+
+m <- prophet(dados)
+futuro <- make_future_dataframe(
+  m, periods = 200
+)
+
+forecast <- predict(m, futuro)
+
+plot(m, forecast)
+```
 
 ## Exercícios do livro
 
