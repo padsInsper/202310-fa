@@ -161,7 +161,7 @@ são ruído branco?
 ```{r}
 
 fit |>
-  select(arima_manual) |>
+  select(stepwise) |>
   gg_tsresiduals(lag = 36)
 
 ```
@@ -171,6 +171,7 @@ augment(fit) |>
   filter(.model == "stepwise") |>
   features(.innov, ljung_box, lag = 36, dof = 4)
 ```
+
 ## Previsão
 
 5. Use o modelo SARIMA de sua escolha para fazer previsões h (livre escolha) passos à frente.
@@ -255,6 +256,7 @@ splits |>
   timetk::tk_time_series_cv_plan() |>
   timetk::plot_time_series_cv_plan(date, value)
 ```
+
 
 ## Modelos SARIMA, ETS e Prophet
 

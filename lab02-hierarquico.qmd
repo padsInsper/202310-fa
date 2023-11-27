@@ -5,7 +5,7 @@ format: html
 
 Séries temporais hierárquicas podem ser de três tipos:
 
-- **Aninhadas**: quando as séries são aninhadas, como por exemplo, a venda de um produto em diferentes regiões do país.
+- **Aninhada**: quando as séries são aninhadas, como por exemplo, a venda de um produto em diferentes regiões do país.
 - **Cruzada**: quando as séries não são aninhadas, mas possuem uma relação entre si, como por exemplo, a venda de produtos de diferentes categorias.
 - **Mista**: quando as séries são aninhadas e cruzadas, como por exemplo, a venda de produtos de diferentes categorias em diferentes regiões do país.
 
@@ -13,6 +13,7 @@ Exemplo de série temporal aninhada:
 
 ```{r}
 library(fpp3)
+library(patchwork)
 
 tourism <- tsibble::tourism |>
   mutate(State = recode(State,
@@ -28,7 +29,8 @@ tourism <- tsibble::tourism |>
 tourism_hts <- tourism |>
   aggregate_key(State / Region, Trips = sum(Trips))
 
-tourism_hts
+view(as_tibble(tourism_hts))
+tail(tourism_hts)
 
 tourism_hts |>
   filter(is_aggregated(Region)) |>
@@ -209,7 +211,7 @@ Finalmente, existem técnicas que combinam BU e TD. Por exemplo, podemos usar o 
 
 ## Minimum Trace (MinT)
 
-O método Minimum Trace (MinT) consiste em um método que minimiza a variância total das previsões dentro do grupo de previsões coerentes. O método MinT é implementado no R usando a função `min_trace()`, com diversas variações ("wsl_struct", "mint_cov", "mint_shrink", "ols").
+O método Minimum Trace (MinT) consiste em minimizar a variância total das previsões dentro do grupo de previsões coerentes. O método MinT é implementado no R usando a função `min_trace()`, com diversas variações ("wsl_struct", "mint_cov", "mint_shrink", "ols").
 
 Do livro do Hyndman:
 
